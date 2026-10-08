@@ -8,6 +8,8 @@ import com.smartpg.backend.repository.PGRepository;
 import com.smartpg.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class PGService {
 
@@ -25,7 +27,7 @@ public class PGService {
         User owner = userRepository.findByEmail(ownerEmail)
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
 
-        if (owner.getRole() != Role.OWNER) {
+        if (owner.getRole() != Role.OWNER && owner.getRole() != Role.ADMIN) {
             throw new RuntimeException("Only owners can create a PG");
         }
 
@@ -36,5 +38,16 @@ public class PGService {
         );
 
         return pgRepository.save(pg);
+    }
+
+    public List<PG> getPGsByOwner(String ownerEmail) {
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
+
+        if (owner.getRole() == Role.ADMIN) {
+            return pgRepository.findAll();
+        }
+
+        return pgRepository.findByOwner(owner);
     }
 }

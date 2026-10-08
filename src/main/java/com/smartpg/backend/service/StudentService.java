@@ -12,6 +12,10 @@ import com.smartpg.backend.repository.StudentRepository;
 import com.smartpg.backend.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class StudentService {
@@ -45,65 +49,114 @@ public class StudentService {
         User owner = userRepository.findByEmail(ownerEmail)
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
 
-        if (owner.getRole() != Role.OWNER) {
+        if (owner.getRole() != Role.OWNER && owner.getRole() != Role.ADMIN) {
             throw new RuntimeException("Only owners can create students");
         }
 
-        PG pg = pgRepository.findByIdAndOwner(pgId, owner)
-                .orElseThrow(() -> new RuntimeException("PG not found or does not belong to owner"));
+        PG pg;
+        if (owner.getRole() == Role.ADMIN) {
+            pg = pgRepository.findById(pgId)
+                    .orElseThrow(() -> new RuntimeException("PG not found"));
+        } else {
+            pg = pgRepository.findByIdAndOwner(pgId, owner)
+                    .orElseThrow(() -> new RuntimeException("PG not found or does not belong to owner"));
+        }
 
         User studentUser = new User();
-
         studentUser.setName(request.getName());
         studentUser.setEmail(request.getEmail());
-        studentUser.setPassword(
-                passwordEncoder.encode(request.getPassword()));
+        studentUser.setPassword(passwordEncoder.encode(request.getPassword()));
         studentUser.setRole(Role.STUDENT);
 
         User savedUser = userRepository.save(studentUser);
 
-        Student student = new Student(
-                savedUser,
-                pg,
-                null);
+        Student student = new Student(savedUser, pg, null);
         return studentRepository.save(student);
     }
 
-    public Student assignRoom(Long studentId,
-            Long roomId,
-            String ownerEmail) {
+    public List<Student> getAllStudentsForOwner(String ownerEmail) {
         User owner = userRepository.findByEmail(ownerEmail)
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
 
-        if (owner.getRole() != Role.OWNER) {
-            throw new RuntimeException("Only owners can assign rooms");
+        if (owner.getRole() == Role.ADMIN) {
+            return studentRepository.findAll();
         }
+
+        List<PG> pgs = pgRepository.findByOwner(owner);
+        List<Student> allStudents = new ArrayList<>();
+        for (PG pg : pgs) {
+            allStudents.addAll(studentRepository.findByPg(pg));
+        }
+        return allStudents;
+    }
+
+    public List<Student> getStudentsByPG(Long pgId, String ownerEmail) {
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
+
+        PG pg;
+        if (owner.getRole() == Role.ADMIN) {
+            pg = pgRepository.findById(pgId)
+                    .orElseThrow(() -> new RuntimeException("PG not found"));
+        } else {
+            pg = pgRepository.findByIdAndOwner(pgId, owner)
+                    .orElseThrow(() -> new RuntimeException("PG not found or does not belong to owner"));
+        }
+
+        return studentRepository.findByPg(pg);
+    }
+
+    public Student updateStudent(Long studentId, String name, String email, String ownerEmail) {
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
 
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new RuntimeException("Student not found"));
 
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new RuntimeException("Room not found"));
-
-        PG pg = room.getPg();
-
-        if (!pg.getOwner().getId().equals(owner.getId())) {
-            throw new RuntimeException("You cannot assign rooms from another owner's PG");
+        if (owner.getRole() != Role.ADMIN && (student.getPg() == null || !student.getPg().getOwner().getId().equals(owner.getId()))) {
+            throw new RuntimeException("You do not have permission to update this student");
         }
 
-        if (student.getPg() == null ||
-                !student.getPg().getId().equals(pg.getId())) {
-            throw new RuntimeException("Student does not belong to this PG");
+        User user = student.getUser();
+        if (name != null && !name.isBlank()) {
+            user.setName(name);
         }
-
-        long occupied = studentRepository.countByRoom(room);
-
-        if (occupied >= room.getCapacity()) {
-            throw new RuntimeException("Room is already full");
+        if (email != null && !email.isBlank()) {
+            if (!email.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(email)) {
+                throw new RuntimeException("Email already in use");
+            }
+            user.setEmail(email);
         }
-
-        student.setRoom(room);
+        userRepository.save(user);
 
         return studentRepository.save(student);
+    }
+
+    @Transactional
+    public void deleteStudent(Long studentId, String ownerEmail) {
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
+
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        if (owner.getRole() != Role.ADMIN && (student.getPg() == null || !student.getPg().getOwner().getId().equals(owner.getId()))) {
+            throw new RuntimeException("You do not have permission to delete this student");
+        }
+
+        if (student.getRoom() != null) {
+            Room room = student.getRoom();
+            if (room.getOccupied() > 0) {
+                room.setOccupied(room.getOccupied() - 1);
+                roomRepository.save(room);
+            }
+            student.setRoom(null);
+        }
+
+        User user = student.getUser();
+        studentRepository.delete(student);
+        if (user != null) {
+            userRepository.delete(user);
+        }
     }
 }

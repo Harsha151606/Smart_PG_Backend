@@ -1,6 +1,7 @@
 package com.smartpg.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "pg")
@@ -16,6 +17,7 @@ public class PG {
     @Column(nullable = false)
     private String address;
 
+    @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
