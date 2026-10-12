@@ -134,16 +134,27 @@ public class AdminService {
                 .orElseThrow(() -> new RuntimeException("PG not found"));
 
         List<Room> rooms = roomRepository.findByPg(pg);
-        List<Student> students = studentRepository.findByPg(pg);
+        for (Room r : rooms) {
+            List<Student> roomStudents = studentRepository.findByRoom(r);
+            for (Student s : roomStudents) {
+                s.setRoom(null);
+                s.setPg(null);
+                studentRepository.save(s);
+            }
+        }
 
-        for (Student s : students) {
+        List<Student> pgStudents = studentRepository.findByPg(pg);
+        for (Student s : pgStudents) {
             s.setRoom(null);
             s.setPg(null);
             studentRepository.save(s);
         }
 
+        studentRepository.flush();
         roomRepository.deleteAll(rooms);
+        roomRepository.flush();
         pgRepository.delete(pg);
+        pgRepository.flush();
     }
 
     public Map<String, Object> getSystemStats() {

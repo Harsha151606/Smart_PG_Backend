@@ -14,5 +14,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     List<Student> findByPg(PG pg);
 
+    List<Student> findByRoom(Room room);
+
     long countByRoom(Room room);
 }
