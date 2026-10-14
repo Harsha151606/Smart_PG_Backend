@@ -129,6 +129,109 @@ public class SmartPgIntegrationTests {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("Security: Public registration rejects ADMIN role and allows STUDENT, OWNER, WARDEN")
+    void testPublicRegistrationRoleSecurity() throws Exception {
+        String uniqueSuffix = String.valueOf(System.currentTimeMillis());
+
+        // 1. Attempt to register as ADMIN -> Must be rejected with 400 Bad Request
+        RegisterRequest adminReg = new RegisterRequest();
+        adminReg.setName("Malicious Admin Attempt");
+        adminReg.setEmail("admin_attempt_" + uniqueSuffix + "@test.com");
+        adminReg.setPassword("AdminPass@123");
+        adminReg.setRole(Role.ADMIN);
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(adminReg)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", containsString("Public registration is restricted to STUDENT, OWNER, and WARDEN")));
+
+        // 2. Register as OWNER -> Allowed (201)
+        RegisterRequest ownerReg = new RegisterRequest();
+        ownerReg.setName("Valid Owner");
+        ownerReg.setEmail("owner_reg_" + uniqueSuffix + "@test.com");
+        ownerReg.setPassword("OwnerPass@123");
+        ownerReg.setRole(Role.OWNER);
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ownerReg)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role", is("OWNER")));
+
+        // 3. Register as WARDEN -> Allowed (201)
+        RegisterRequest wardenReg = new RegisterRequest();
+        wardenReg.setName("Valid Warden");
+        wardenReg.setEmail("warden_reg_" + uniqueSuffix + "@test.com");
+        wardenReg.setPassword("WardenPass@123");
+        wardenReg.setRole(Role.WARDEN);
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(wardenReg)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role", is("WARDEN")));
+    }
+
+    @Test
+    @DisplayName("Security: Single Admin enforcement prevents creating additional admins or promoting to admin")
+    void testSingleAdminEnforcement() throws Exception {
+        String uniqueSuffix = String.valueOf(System.currentTimeMillis());
+
+        // Ensure at least one admin exists
+        if (userRepository.countByRole(Role.ADMIN) == 0) {
+            userRepository.save(new User("Admin Test", "admin_base_" + uniqueSuffix + "@test.com", "pass", Role.ADMIN));
+        }
+
+        // 1. Attempt to create another ADMIN through admin user management API -> Must fail (400)
+        UserManageRequest newAdminReq = new UserManageRequest(
+                "Second Admin",
+                "second_admin_" + uniqueSuffix + "@test.com",
+                "Password@123",
+                Role.ADMIN
+        );
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(newAdminReq)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", containsString("The system allows exactly one System Administrator")));
+
+        // 2. Create an ordinary user first
+        UserManageRequest normalUserReq = new UserManageRequest(
+                "Normal User",
+                "normal_user_" + uniqueSuffix + "@test.com",
+                "Password@123",
+                Role.STUDENT
+        );
+
+        String createRes = mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(normalUserReq)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        Long normalUserId = objectMapper.readTree(createRes).get("id").asLong();
+
+        // 3. Attempt to promote ordinary user to ADMIN -> Must fail (400)
+        UserManageRequest promoteReq = new UserManageRequest(
+                "Promoted User",
+                "normal_user_" + uniqueSuffix + "@test.com",
+                null,
+                Role.ADMIN
+        );
+
+        mockMvc.perform(put("/api/admin/users/" + normalUserId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(promoteReq)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", containsString("Cannot promote user to Admin")));
+    }
+
     // ========================================================
     // PHASE 5 — ROLE AUTHORIZATION TESTING
     // ========================================================

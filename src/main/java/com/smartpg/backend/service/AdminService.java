@@ -54,6 +54,9 @@ public class AdminService {
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             throw new IllegalArgumentException("Password is required for new user");
         }
+        if (request.getRole() == Role.ADMIN && userRepository.countByRole(Role.ADMIN) >= 1) {
+            throw new IllegalArgumentException("Cannot create an additional Admin account. The system allows exactly one System Administrator.");
+        }
 
         User user = new User();
         user.setName(request.getName());
@@ -73,6 +76,10 @@ public class AdminService {
             throw new RuntimeException("Email already in use");
         }
 
+        if (request.getRole() == Role.ADMIN && user.getRole() != Role.ADMIN && userRepository.countByRole(Role.ADMIN) >= 1) {
+            throw new IllegalArgumentException("Cannot promote user to Admin. The system allows exactly one System Administrator.");
+        }
+
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setRole(request.getRole());
@@ -88,6 +95,10 @@ public class AdminService {
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new IllegalArgumentException("The primary System Administrator account cannot be deleted.");
+        }
 
         // If user is a student, remove student record first
         studentRepository.findByUserId(id).ifPresent(student -> {
