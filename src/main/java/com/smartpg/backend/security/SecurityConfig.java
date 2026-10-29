@@ -76,7 +76,10 @@ public class SecurityConfig {
                 "http://127.0.0.1:*",
                 "https://smartpg-beryl.vercel.app",
                 "https://smartpg-3dgjhwswn-harsha-6f44.vercel.app",
-                "https://smartpg-git-feature-actionable-dashboards-harsha-6f44.vercel.app"
+                "https://smartpg-git-feature-actionable-dashboards-harsha-6f44.vercel.app",
+                "https://smartpg-lm0q4uruf-harsha-6f44.vercel.app",
+                "https://smartpg-g82c6ml15-harsha-6f44.vercel.app",
+                "https://smartpg-bvj32vxt8-harsha-6f44.vercel.app"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
