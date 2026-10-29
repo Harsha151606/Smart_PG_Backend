@@ -34,15 +34,12 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
-
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -55,57 +52,18 @@ public class SecurityConfig {
                             response.getWriter().write("{\"error\":\"Forbidden - access denied\"}");
                         })
                 )
-
                 .authorizeHttpRequests(auth -> auth
-                        // Login & Register & Error
-                        .requestMatchers(
-                                "/api/auth/**",
-                                "/error"
-                        ).permitAll()
-
-                        // Admin
-                        .requestMatchers(
-                                "/api/admin/**"
-                        ).hasRole("ADMIN")
-
-                        // Owner
-                        .requestMatchers(
-                                "/api/owner/**"
-                        ).hasAnyRole("OWNER", "ADMIN")
-
-                        // Room assignment
-                        .requestMatchers(
-                                "/api/room-assignment/**"
-                        ).hasAnyRole("OWNER", "ADMIN")
-
-                        // Payments by student
-                        .requestMatchers(
-                                "/api/payments/student/**"
-                        ).hasAnyRole("STUDENT", "OWNER", "ADMIN")
-
-                        // Other Payments
-                        .requestMatchers(
-                                "/api/payments/**"
-                        ).hasAnyRole("OWNER", "ADMIN")
-
-                        // Warden
-                        .requestMatchers(
-                                "/api/warden/**"
-                        ).hasAnyRole("WARDEN", "ADMIN")
-
-                        // Student self endpoints
-                        .requestMatchers(
-                                "/api/student/**"
-                        ).hasAnyRole("STUDENT", "WARDEN", "OWNER", "ADMIN")
-
-                        .anyRequest()
-                        .authenticated()
+                        .requestMatchers("/api/auth/**", "/error").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "ADMIN")
+                        .requestMatchers("/api/room-assignment/**").hasAnyRole("OWNER", "ADMIN")
+                        .requestMatchers("/api/payments/student/**").hasAnyRole("STUDENT", "OWNER", "ADMIN")
+                        .requestMatchers("/api/payments/**").hasAnyRole("OWNER", "ADMIN")
+                        .requestMatchers("/api/warden/**").hasAnyRole("WARDEN", "ADMIN")
+                        .requestMatchers("/api/student/**").hasAnyRole("STUDENT", "WARDEN", "OWNER", "ADMIN")
+                        .anyRequest().authenticated()
                 )
-
-                .addFilterBefore(
-                        jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                );
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -113,7 +71,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "https://smartpg-beryl.vercel.app", "https://smartpg-3dgjhwswn-harsha-6f44.vercel.app"));
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "https://smartpg-beryl.vercel.app",
+                "https://smartpg-3dgjhwswn-harsha-6f44.vercel.app",
+                "https://smartpg-git-feature-actionable-dashboards-harsha-6f44.vercel.app"
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
